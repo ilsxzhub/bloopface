@@ -75,7 +75,9 @@
 </head>
 <body>
 
-  <div class="eye-container" aria-hidden="true">
+  <button id="startBloop" style="padding:20px 40px;font-size:22px;border-radius:16px;background:#00aaff;border:0;box-shadow:0 0 20px #00aaff,0 0 40px #00aaff;color:white;cursor:pointer;margin-bottom:20px;transition:0.2s;">🔵 Start Bloop</button>
+
+<div class="eye-container"" aria-hidden="true">
     <div class="eye" id="eye1"><div class="eyelid"></div></div>
     <div class="eye" id="eye2"><div class="eyelid"></div></div>
   </div>
@@ -119,7 +121,14 @@ if (!SpeechRecognition) {
       u.rate = 1;
       u.pitch = 1.05;
       u.onend = () => {
-        setTimeout(()=>navigator.mediaDevices.getUserMedia({ audio: true }).then(() => { recognition.start(); }).catch(()=>{ setStatus('Microphone blocked—enable mic permissions.'); });(),200);
+        setTimeout(()=>navigator.mediaDevices.getUserMedia({ audio: true }).then(() => { document.getElementById('startBloop').onclick = () => {
+  document.getElementById('startBloop').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+    recognition.start();
+  }).catch(()=>{
+    setStatus('Microphone blocked — allow microphone.');
+  });
+};(); }).catch(()=>{ setStatus('Microphone blocked—enable mic permissions.'); });(),200);
         resolve();
       };
       speechSynthesis.speak(u);
