@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Bloop</title>
+<title>Bloop — AI Robot Eyes</title>
 <style>
-  /* --- page + eye styles (kept from your original file) --- */
   body {
     background-color: #000;
     display: flex;
@@ -48,7 +47,6 @@
 
   .eye.blink .eyelid { transform: scaleY(1); }
 
-  /* thinking pulse when AI is responding */
   .eye.thinking { animation: thinkPulse 0.9s infinite; }
   @keyframes thinkPulse {
     0% { box-shadow: 0 0 20px #00f, 0 0 40px #00f, 0 0 60px #00f; transform: scale(1); }
@@ -56,7 +54,6 @@
     100% { box-shadow: 0 0 20px #00f, 0 0 40px #00f, 0 0 60px #00f; transform: scale(1); }
   }
 
-  /* small UI for debugging and status */
   .panel {
     width: min(920px, 92vw);
     background: rgba(10, 20, 30, 0.6);
@@ -73,7 +70,6 @@
   .transcript { opacity: 0.9; font-size: 0.9rem; color: #dff6ff; }
   button { background: #012; color: #9ef; border: 1px solid rgba(160,240,255,0.08); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 
-  /* responsiveness */
   @media (max-width:600px){ .eye { width:90px; height:90px } .eye-container { gap: 40px } }
 </style>
 </head>
@@ -86,226 +82,92 @@
 
   <div class="panel">
     <div>
-      <div class="status" id="status">Status: <strong id="statusText">Waiting for "looi"</strong></div>
+      <div class="status" id="status">Status: <strong id="statusText">Waiting for "bloop"</strong></div>
       <div class="transcript" id="transcript">Transcript: —</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="toggleListen">Stop Listening</button>
-      <button id="testAI">Test AI (example)</button>
     </div>
   </div>
 
 <script>
-/* =========================
-   Simple eye blink function
-   ========================= */
 function blink() {
   const eyes = document.querySelectorAll('.eye');
   eyes.forEach(eye => eye.classList.add('blink'));
   setTimeout(() => eyes.forEach(eye => eye.classList.remove('blink')), 200);
 }
 
-/* Small helper to set status on the UI */
 const statusText = document.getElementById('statusText');
 const transcriptEl = document.getElementById('transcript');
 function setStatus(s) { statusText.textContent = s; }
 
-/* =========================
-   Speech recognition setup
-   ========================= */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (!SpeechRecognition) {
-  setStatus('SpeechRecognition not supported in this browser.');
-  alert('Your browser does not support Speech Recognition. Use Chrome or a Chromium-based browser.');
+  setStatus('SpeechRecognition not supported.');
 } else {
   const recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = false;
   recognition.lang = 'en-US';
 
-  let isListening = true;
-  let awaitingCommand = false;   // true after hearing the wake word
-  let lastWakeAt = 0;           // throttle wake re-trigger
-  const WAKE_THROTTLE_MS = 1500;
+  let awaitingCommand = false;
+  const WAKE = "bloop";
 
-  // Replace this with your BloopBot API URL if needed
-  const BLOOP_API = 'https://bloopbot-api.ethanoka94.workers.dev/';
+  const API_URL = "https://bloopbot-api.ethanoka94.workers.dev/";
 
-  // Text-to-speech helper
   function speak(text) {
-    return new Promise((resolve) => {
-      // stop recognition while speaking so recognition doesn't pick up the TTS
-      try { recognition.stop(); } catch(e) {}
-      setStatus('Speaking...');
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1;
-      utter.pitch = 1.05;
-      utter.onend = () => {
-        setStatus('Idle — waiting for "bloop"');
-        // restart recognition after a small delay
-        setTimeout(() => {
-          try { if (isListening) recognition.start(); } catch(e) {}
-        }, 250);
+    return new Promise(resolve => {
+      try { recognition.stop(); } catch(e){}
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1;
+      u.pitch = 1.05;
+      u.onend = () => {
+        setTimeout(()=>recognition.start(),200);
         resolve();
       };
-      speechSynthesis.speak(utter);
+      speechSynthesis.speak(u);
     });
   }
 
-  // When we want to show AI is thinking: add class to eyes
-  function startThinking() {
-    document.querySelectorAll('.eye').forEach(e => e.classList.add('thinking'));
-    setStatus('Thinking...');
-  }
-  function stopThinking() {
-    document.querySelectorAll('.eye').forEach(e => e.classList.remove('thinking'));
-    setStatus('Idle — waiting for "bloop"');
+  function thinking(on) {
+    document.querySelectorAll('.eye').forEach(e=>e.classList.toggle('thinking',on));
   }
 
-  // Send text prompt to your BloopBot API and return reply (string)
-  async function sendToBloopBot(prompt) {
-    startThinking();
-    try {
-      const resp = await fetch(BLOOP_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt })
-      });
-
-      // Try parsing as JSON with common keys, fallback to plain text
-      const contentType = resp.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const j = await resp.json();
-        // common shapes: {reply: "..."} or {response: "..."} or {message: "..."}
-        return j.reply || j.response || j.message || JSON.stringify(j);
-      } else {
-        // plain text
-        const txt = await resp.text();
-        return txt;
-      }
-    } catch (err) {
-      console.error('API error', err);
-      return "Sorry, I couldn't reach the AI service.";
-    } finally {
-      stopThinking();
-    }
+  async function askAI(msg) {
+    thinking(true);
+    const r = await fetch(API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ message: msg })
+    });
+    const j = await r.json();
+    thinking(false);
+    return j.reply || "Sorry, no reply.";
   }
 
-  // handle recognition result
   recognition.onresult = (ev) => {
-    // get the most recent final result
-    const last = ev.results[ev.results.length - 1];
-    const text = last[0].transcript.trim();
-    const lower = text.toLowerCase();
-    transcriptEl.textContent = 'Transcript: ' + text;
-    console.log('Heard:', text);
+    const text = ev.results[ev.results.length-1][0].transcript.toLowerCase().trim();
+    transcriptEl.textContent = "Transcript: " + text;
 
-    const now = Date.now();
-
-    // If we are awaiting the user's command (after wake word)
-    if (awaitingCommand) {
-      awaitingCommand = false;
-      // treat this text as the user's query
-      (async () => {
-        setStatus('Sending to AI...');
-        blink();
-        const reply = await sendToBloopBot(text);
-        console.log('AI replied:', reply);
-        await speak(reply);
-      })();
+    if (text.includes(WAKE)) {
+      blink();
+      awaitingCommand = true;
+      speak("Yes? I'm listening.");
       return;
     }
 
-    // Wake-word detection
-    if (lower.includes('looi')) {
-      // throttle repeat triggers
-      if (now - lastWakeAt < WAKE_THROTTLE_MS) {
-        console.log('Wake word suppressed by throttle');
-        return;
-      }
-      lastWakeAt = now;
-
-      // remove the word looi from the phrase (if user said something after it)
-      const afterWake = lower.replace(/.*bloop[,!\s]*/i, '').trim();
-
-      // visual + audio acknowledgement
-      blink();
-      // if user directly said "looi do X", use the remainder as the command
-      if (afterWake.length > 0) {
-        (async () => {
-          setStatus('Heard wake + command — sending to AI...');
-          startThinking();
-          const reply = await sendToBloopBot(afterWake);
-          await speak(reply);
-        })();
-      } else {
-        // if user only said "looi", prompt them and wait for next phrase
-        awaitingCommand = true;
-        (async () => {
-          await speak("Yes? I'm listening.");
-          setStatus('Waiting for your command...');
-          // recognition continues; next onresult will be captured as command
-        })();
-      }
-    } // end wake-word branch
-  };
-
-  recognition.onerror = (e) => {
-    console.warn('Recognition error', e);
-    // try to restart on some errors
-    try {
-      recognition.stop();
-      setTimeout(()=>{ if (isListening) recognition.start(); }, 700);
-    } catch(err) {}
-  };
-
-  recognition.onend = () => {
-    console.log('Recognition ended');
-    // keep it running if we should be listening
-    if (isListening && !speechSynthesis.speaking) {
-      try { recognition.start(); } catch(e) { console.warn(e); }
+    if (awaitingCommand) {
+      awaitingCommand = false;
+      (async()=>{
+        const reply = await askAI(text);
+        await speak(reply);
+      })();
     }
   };
 
-  // Start recognition
-  try {
-    recognition.start();
-    setStatus('Listening for "Bloop"...');
-  } catch (e) {
-    console.warn('Could not start recognition', e);
-    setStatus('Could not start recognition');
-  }
+  recognition.start();
+  setStatus('Listening for "bloop"...');
 
-  // UI toggle for listening
-  const toggleListenBtn = document.getElementById('toggleListen');
-  toggleListenBtn.addEventListener('click', () => {
-    if (isListening) {
-      isListening = false;
-      try { recognition.stop(); } catch(e) {}
-      toggleListenBtn.textContent = 'Start Listening';
-      setStatus('Stopped listening');
-    } else {
-      isListening = true;
-      try { recognition.start(); } catch(e) {}
-      toggleListenBtn.textContent = 'Stop Listening';
-      setStatus('Listening for "Bloop"...');
-    }
-  });
-
-  // Quick test against your API (example)
-  document.getElementById('testAI').addEventListener('click', async () => {
-    const testPrompt = 'Say hello from Bloop!';
-    setStatus('Testing AI...');
-    startThinking();
-    const r = await sendToBloopBot(testPrompt);
-    await speak(r);
-  });
-
-  // make the eyes blink randomly (ambient blinking)
-  setInterval(() => { if (!document.querySelector('.eye').classList.contains('thinking')) { blink(); } }, Math.random()*3000 + 2000);
-} // end SpeechRecognition block
+  setInterval(()=>blink(), Math.random()*3000 + 2000);
+}
 </script>
-
 </body>
 </html>
 
