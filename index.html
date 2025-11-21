@@ -119,7 +119,7 @@ if (!SpeechRecognition) {
       u.rate = 1;
       u.pitch = 1.05;
       u.onend = () => {
-        setTimeout(()=>recognition.start(),200);
+        setTimeout(()=>navigator.mediaDevices.getUserMedia({ audio: true }).then(() => { recognition.start(); }).catch(()=>{ setStatus('Microphone blocked—enable mic permissions.'); });(),200);
         resolve();
       };
       speechSynthesis.speak(u);
