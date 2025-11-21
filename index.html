@@ -105,6 +105,14 @@ if (!SpeechRecognition) {
   setStatus('SpeechRecognition not supported.');
 } else {
   const recognition = new SpeechRecognition();
+
+  // FIX: Keep mic alive and auto-restart safely
+  recognition.onend = () => {
+    console.log('Recognition ended — restarting');
+    const restart = () => { try { recognition.start(); } catch(e){} };
+    if (!speechSynthesis.speaking) restart();
+    else speechSynthesis.addEventListener('end', restart, { once: true });
+  };
   recognition.continuous = true;
   recognition.interimResults = false;
   recognition.lang = 'en-US';
