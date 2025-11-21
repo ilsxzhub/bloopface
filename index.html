@@ -90,6 +90,7 @@
   </div>
 
 <script>
+// ---- Bloop stable voice assistant script ----
 function blink() {
   const eyes = document.querySelectorAll('.eye');
   eyes.forEach(eye => eye.classList.add('blink'));
@@ -105,84 +106,132 @@ if (!SpeechRecognition) {
   setStatus('SpeechRecognition not supported.');
 } else {
   const recognition = new SpeechRecognition();
-
-  // FIX: Keep mic alive and auto-restart safely
-  recognition.onend = () => {
-    console.log('Recognition ended — restarting');
-    const restart = () => { try { recognition.start(); } catch(e){} };
-    if (!speechSynthesis.speaking) restart();
-    else speechSynthesis.addEventListener('end', restart, { once: true });
-  };
   recognition.continuous = true;
   recognition.interimResults = false;
   recognition.lang = 'en-US';
 
+  // Auto-restart safely when recognition ends
+  recognition.onend = () => {
+    console.log('Recognition ended — attempting restart');
+    const tryRestart = () => {
+      try { recognition.start(); setStatus('Listening for "bloop"...'); } catch (e) { console.warn('Restart failed', e); }
+    };
+    if (!speechSynthesis.speaking) {
+      // safe to restart now
+      setTimeout(tryRestart, 200);
+    } else {
+      // wait until TTS finishes
+      const onEnd = () => { tryRestart(); speechSynthesis.removeEventListener('end', onEnd); };
+      speechSynthesis.addEventListener('end', onEnd);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn('Recognition error', e);
+    setStatus('Recognition error — retrying...');
+    try { recognition.stop(); } catch(e){}
+    setTimeout(() => { try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e){} }, 700);
+  };
+
   let awaitingCommand = false;
-  const WAKE = "boop";
+  const WAKE = 'bloop';
+  const API_URL = 'https://bloopbot-api.ethanoka94.workers.dev/';
 
-  const API_URL = "https://bloopbot-api.ethanoka94.workers.dev/";
-
+  // Speak helper: pause recognition, speak, then resume
   function speak(text) {
     return new Promise(resolve => {
-      try { recognition.stop(); } catch(e){}
+      try { recognition.stop(); } catch (e) { /* ignore */ }
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1;
       u.pitch = 1.05;
       u.onend = () => {
-        setTimeout(()=>navigator.mediaDevices.getUserMedia({ audio: true }).then(() => { document.getElementById('startBloop').onclick = () => {
-  document.getElementById('startBloop').style.display = 'none';
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-    recognition.start();
-  }).catch(()=>{
-    setStatus('Microphone blocked — allow microphone.');
-  });
-};(); }).catch(()=>{ setStatus('Microphone blocked—enable mic permissions.'); });(),200);
-        resolve();
+        // restart recognition after a short delay
+        setTimeout(() => {
+          try { recognition.start(); setStatus('Listening for "bloop"...'); } catch (e) { console.warn(e); }
+          resolve();
+        }, 220);
       };
       speechSynthesis.speak(u);
+      setStatus('Speaking...');
     });
   }
 
   function thinking(on) {
-    document.querySelectorAll('.eye').forEach(e=>e.classList.toggle('thinking',on));
+    document.querySelectorAll('.eye').forEach(e => e.classList.toggle('thinking', on));
   }
 
   async function askAI(msg) {
     thinking(true);
-    const r = await fetch(API_URL, {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ message: msg })
-    });
-    const j = await r.json();
-    thinking(false);
-    return j.reply || "Sorry, no reply.";
+    setStatus('Thinking...');
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const j = await r.json();
+      return j.reply || j.response || j.message || 'Sorry, no reply.';
+    } catch (err) {
+      console.error('API error', err);
+      return "Sorry, I couldn't reach the AI service.";
+    } finally {
+      thinking(false);
+      setStatus('Idle — waiting for "bloop"');
+    }
   }
 
   recognition.onresult = (ev) => {
-    const text = ev.results[ev.results.length-1][0].transcript.toLowerCase().trim();
-    transcriptEl.textContent = "Transcript: " + text;
+    const text = ev.results[ev.results.length - 1][0].transcript.trim();
+    const lower = text.toLowerCase();
+    transcriptEl.textContent = 'Transcript: ' + text;
+    console.log('Heard:', text);
 
-    if (text.includes(WAKE)) {
-      blink();
-      awaitingCommand = true;
-      speak("Yes? I'm listening.");
-      return;
-    }
-
+    // If we are awaiting a command, treat this as the command
     if (awaitingCommand) {
       awaitingCommand = false;
-      (async()=>{
+      (async () => {
         const reply = await askAI(text);
         await speak(reply);
       })();
+      return;
+    }
+
+    // Wake-word detection
+    if (lower.includes(WAKE)) {
+      blink();
+      // If user said "bloop something", capture remainder as command
+      const after = lower.replace(new RegExp('.*' + WAKE + '[,!?\s]*'), '').trim();
+      if (after.length > 0) {
+        (async () => {
+          const reply = await askAI(after);
+          await speak(reply);
+        })();
+      } else {
+        awaitingCommand = true;
+        speak("Yes? I'm listening.");
+      }
     }
   };
 
-  recognition.start();
-  setStatus('Listening for "bloop"...');
+  // Start button behaviour: only start recognition after user interaction
+  const startBtn = document.getElementById('startBloop');
+  if (startBtn) {
+    startBtn.addEventListener('click', () => {
+      startBtn.style.display = 'none';
+      // Ensure microphone permission by requesting getUserMedia once
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+        try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e) { console.warn(e); }
+      }).catch(() => {
+        setStatus('Microphone blocked — allow microphone.');
+      });
+    });
+  } else {
+    // If no button present, try to start (may be blocked by browser)
+    try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e) { setStatus('Click Start to enable microphone.'); }
+  }
 
-  setInterval(()=>blink(), Math.random()*3000 + 2000);
+  // Ambient blinking
+  setInterval(() => { if (!document.querySelector('.eye').classList.contains('thinking')) blink(); }, Math.random() * 3000 + 2000);
 }
 </script>
 </body>
