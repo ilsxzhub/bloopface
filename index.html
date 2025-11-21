@@ -124,10 +124,12 @@ if (!SpeechRecognition) {
   };
 
   const API_URL = 'https://bloopbot-api.ethanoka94.workers.dev/';
+  let lastReply = '';
 
   function speak(text) {
     return new Promise(resolve => {
       try { recognition.stop(); } catch (e) { }
+      lastReply = text;
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1;
       u.pitch = 1.05;
@@ -135,7 +137,7 @@ if (!SpeechRecognition) {
         setTimeout(() => {
           try { recognition.start(); setStatus('Listening...'); } catch (e) { console.warn(e); }
           resolve();
-        }, 220);
+        }, 300);
       };
       speechSynthesis.speak(u);
       setStatus('Speaking...');
@@ -168,6 +170,7 @@ if (!SpeechRecognition) {
 
   recognition.onresult = (ev) => {
     const text = ev.results[ev.results.length - 1][0].transcript.trim();
+    if (text === lastReply) return; // ignore AI's own speech
     transcriptEl.textContent = 'Transcript: ' + text;
     console.log('Heard:', text);
     blink();
@@ -188,6 +191,8 @@ if (!SpeechRecognition) {
       });
     });
   }
+
+  // Ambient blinking
   setInterval(() => { if (!document.querySelector('.eye').classList.contains('thinking')) blink(); }, Math.random() * 3000 + 2000);
 }
 </script>
