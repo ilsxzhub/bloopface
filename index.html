@@ -77,20 +77,20 @@
 
   <button id="startBloop" style="padding:20px 40px;font-size:22px;border-radius:16px;background:#00aaff;border:0;box-shadow:0 0 20px #00aaff,0 0 40px #00aaff;color:white;cursor:pointer;margin-bottom:20px;transition:0.2s;">🔵 Start Bloop</button>
 
-<div class="eye-container"" aria-hidden="true">
+  <div class="eye-container" aria-hidden="true">
     <div class="eye" id="eye1"><div class="eyelid"></div></div>
     <div class="eye" id="eye2"><div class="eyelid"></div></div>
   </div>
 
   <div class="panel">
     <div>
-      <div class="status" id="status">Status: <strong id="statusText">Waiting for "bloop"</strong></div>
+      <div class="status" id="status">Status: <strong id="statusText">Waiting...</strong></div>
       <div class="transcript" id="transcript">Transcript: —</div>
     </div>
   </div>
 
 <script>
-// ---- Bloop stable voice assistant script ----
+// ---- Bloop continuous voice assistant script ----
 function blink() {
   const eyes = document.querySelectorAll('.eye');
   eyes.forEach(eye => eye.classList.add('blink'));
@@ -110,44 +110,30 @@ if (!SpeechRecognition) {
   recognition.interimResults = false;
   recognition.lang = 'en-US';
 
-  // Auto-restart safely when recognition ends
   recognition.onend = () => {
-    console.log('Recognition ended — attempting restart');
-    const tryRestart = () => {
-      try { recognition.start(); setStatus('Listening for "bloop"...'); } catch (e) { console.warn('Restart failed', e); }
-    };
-    if (!speechSynthesis.speaking) {
-      // safe to restart now
-      setTimeout(tryRestart, 200);
-    } else {
-      // wait until TTS finishes
-      const onEnd = () => { tryRestart(); speechSynthesis.removeEventListener('end', onEnd); };
-      speechSynthesis.addEventListener('end', onEnd);
-    }
+    setTimeout(() => {
+      try { recognition.start(); setStatus('Listening...'); } catch (e) { console.warn(e); }
+    }, 200);
   };
 
   recognition.onerror = (e) => {
     console.warn('Recognition error', e);
     setStatus('Recognition error — retrying...');
     try { recognition.stop(); } catch(e){}
-    setTimeout(() => { try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e){} }, 700);
+    setTimeout(() => { try { recognition.start(); setStatus('Listening...'); } catch(e){} }, 700);
   };
 
-  let awaitingCommand = false;
-  const WAKE = 'bloop';
   const API_URL = 'https://bloopbot-api.ethanoka94.workers.dev/';
 
-  // Speak helper: pause recognition, speak, then resume
   function speak(text) {
     return new Promise(resolve => {
-      try { recognition.stop(); } catch (e) { /* ignore */ }
+      try { recognition.stop(); } catch (e) { }
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1;
       u.pitch = 1.05;
       u.onend = () => {
-        // restart recognition after a short delay
         setTimeout(() => {
-          try { recognition.start(); setStatus('Listening for "bloop"...'); } catch (e) { console.warn(e); }
+          try { recognition.start(); setStatus('Listening...'); } catch (e) { console.warn(e); }
           resolve();
         }, 220);
       };
@@ -176,64 +162,36 @@ if (!SpeechRecognition) {
       return "Sorry, I couldn't reach the AI service.";
     } finally {
       thinking(false);
-      setStatus('Idle — waiting for "bloop"');
+      setStatus('Idle');
     }
   }
 
   recognition.onresult = (ev) => {
     const text = ev.results[ev.results.length - 1][0].transcript.trim();
-    const lower = text.toLowerCase();
     transcriptEl.textContent = 'Transcript: ' + text;
     console.log('Heard:', text);
-
-    // If we are awaiting a command, treat this as the command
-    if (awaitingCommand) {
-      awaitingCommand = false;
-      (async () => {
-        const reply = await askAI(text);
-        await speak(reply);
-      })();
-      return;
-    }
-
-    // Wake-word detection
-    if (lower.includes(WAKE)) {
-      blink();
-      // If user said "bloop something", capture remainder as command
-      const after = lower.replace(new RegExp('.*' + WAKE + '[,!?\s]*'), '').trim();
-      if (after.length > 0) {
-        (async () => {
-          const reply = await askAI(after);
-          await speak(reply);
-        })();
-      } else {
-        awaitingCommand = true;
-        speak("Yes? I'm listening.");
-      }
-    }
+    blink();
+    (async () => {
+      const reply = await askAI(text);
+      await speak(reply);
+    })();
   };
 
-  // Start button behaviour: only start recognition after user interaction
   const startBtn = document.getElementById('startBloop');
   if (startBtn) {
     startBtn.addEventListener('click', () => {
       startBtn.style.display = 'none';
-      // Ensure microphone permission by requesting getUserMedia once
       navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-        try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e) { console.warn(e); }
+        try { recognition.start(); setStatus('Listening...'); } catch(e) { console.warn(e); }
       }).catch(() => {
         setStatus('Microphone blocked — allow microphone.');
       });
     });
-  } else {
-    // If no button present, try to start (may be blocked by browser)
-    try { recognition.start(); setStatus('Listening for "bloop"...'); } catch(e) { setStatus('Click Start to enable microphone.'); }
   }
-
-  // Ambient blinking
   setInterval(() => { if (!document.querySelector('.eye').classList.contains('thinking')) blink(); }, Math.random() * 3000 + 2000);
 }
 </script>
 </body>
 </html>
+
 
