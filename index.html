@@ -141,7 +141,7 @@ if (!SpeechRecognition) {
       utter.rate = 1;
       utter.pitch = 1.05;
       utter.onend = () => {
-        setStatus('Idle — waiting for "looi"');
+        setStatus('Idle — waiting for "bloop"');
         // restart recognition after a small delay
         setTimeout(() => {
           try { if (isListening) recognition.start(); } catch(e) {}
@@ -159,7 +159,7 @@ if (!SpeechRecognition) {
   }
   function stopThinking() {
     document.querySelectorAll('.eye').forEach(e => e.classList.remove('thinking'));
-    setStatus('Idle — waiting for "looi"');
+    setStatus('Idle — waiting for "bloop"');
   }
 
   // Send text prompt to your BloopBot API and return reply (string)
@@ -226,7 +226,7 @@ if (!SpeechRecognition) {
       lastWakeAt = now;
 
       // remove the word looi from the phrase (if user said something after it)
-      const afterWake = lower.replace(/.*looi[,!\s]*/i, '').trim();
+      const afterWake = lower.replace(/.*bloop[,!\s]*/i, '').trim();
 
       // visual + audio acknowledgement
       blink();
@@ -270,7 +270,7 @@ if (!SpeechRecognition) {
   // Start recognition
   try {
     recognition.start();
-    setStatus('Listening for "looi"...');
+    setStatus('Listening for "Bloop"...');
   } catch (e) {
     console.warn('Could not start recognition', e);
     setStatus('Could not start recognition');
@@ -288,13 +288,13 @@ if (!SpeechRecognition) {
       isListening = true;
       try { recognition.start(); } catch(e) {}
       toggleListenBtn.textContent = 'Stop Listening';
-      setStatus('Listening for "looi"...');
+      setStatus('Listening for "Bloop"...');
     }
   });
 
   // Quick test against your API (example)
   document.getElementById('testAI').addEventListener('click', async () => {
-    const testPrompt = 'Say hello from LOOI!';
+    const testPrompt = 'Say hello from Bloop!';
     setStatus('Testing AI...');
     startThinking();
     const r = await sendToBloopBot(testPrompt);
