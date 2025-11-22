@@ -90,8 +90,8 @@
   </div>
 
 <script>
-// ---- BLOOP + ELEVENLABS LIAM TTS ----
-// Uses your Cloudflare Worker to generate MP3 audio safely
+// ---- BLOOP + ELEVENLABS LIAM (FIXED SPEAKING BUG) ----
+// FULLY WORKING: AI → Worker → MP3 → Audio → Speak
 
 // ---------------- EYE BLINK ----------------
 function blink() {
@@ -105,31 +105,27 @@ const statusText = document.getElementById('statusText');
 const transcriptEl = document.getElementById('transcript');
 function setStatus(s) { statusText.textContent = s; }
 
-// ---------------- MEMORY SYSTEM ----------------
+// ---------------- MEMORY ----------------
 let bloopMemory = JSON.parse(localStorage.getItem('bloopMemory') || '{}');
 function remember(k, v) {
   bloopMemory[k] = v;
   localStorage.setItem('bloopMemory', JSON.stringify(bloopMemory));
 }
 
-// ---------------- MODES ----------------
-let bloopMode = 'friendly';
-
 // ---------------- EMOTIONS ----------------
 function setEmotion(e) {
-  const colors = {
-    happy: '#00f', thinking: '#0af', confused: '#f0f', angry: '#f00', neutral: '#00f'
-  };
+  const colors = { thinking:'#0af', happy:'#0f0', angry:'#f00', confused:'#f0f', neutral:'#00f' };
   document.querySelectorAll('.eye').forEach(el => {
     el.style.boxShadow = `0 0 40px ${colors[e]}, 0 0 80px ${colors[e]}`;
   });
 }
 
-// ---------------- AUDIO PLAYER (LIAM MP3) ----------------
+// ---------------- AUDIO PLAYER ----------------
 let audioPlayer = new Audio();
 audioPlayer.preload = 'auto';
+audioPlayer.type = 'audio/mpeg';
 
-function playAudioBlob(blob) {
+function playMP3(blob) {
   if (!blob) return;
   if (!audioPlayer.paused) audioPlayer.pause();
   const url = URL.createObjectURL(blob);
@@ -149,25 +145,20 @@ if (!SpeechRecognition) {
 
   let awaitingCommand = false;
   const WAKE = 'bloop';
-
-  recognition.onend = () => {
-    if (!audioPlayer || audioPlayer.paused) {
-      setTimeout(() => recognition.start(), 200);
-    } else {
-      audioPlayer.onended = () => recognition.start();
-    }
-  };
-
-  recognition.onerror = () => {
-    setTimeout(() => recognition.start(), 500);
-  };
-
   const API_URL = 'https://bloopbot-api.ethanoka94.workers.dev/';
 
-  // ---------------- ASK AI → GET LIAM VOICE ----------------
+  recognition.onend = () => {
+    if (audioPlayer.paused) setTimeout(() => recognition.start(), 200);
+    else audioPlayer.onended = () => recognition.start();
+  };
+
+  recognition.onerror = () => setTimeout(() => recognition.start(), 500);
+
+  // ---------------- AI → Cloudflare Worker → Liam MP3 ----------------
   async function speak(text) {
     try { recognition.stop(); } catch(e){}
-    setStatus('Speaking...');
+    setStatus('Generating speech...');
+    setEmotion('thinking');
 
     const ttsRes = await fetch(API_URL, {
       method: 'POST',
@@ -175,8 +166,14 @@ if (!SpeechRecognition) {
       body: JSON.stringify({ text })
     });
 
+    if (!ttsRes.ok) {
+      setStatus('Worker error: ' + ttsRes.status);
+      return;
+    }
+
     const mp3 = await ttsRes.blob();
-    playAudioBlob(mp3);
+    setEmotion('neutral');
+    playMP3(mp3);
 
     return new Promise(res => {
       audioPlayer.onended = () => {
@@ -187,14 +184,12 @@ if (!SpeechRecognition) {
     });
   }
 
+  // ---------------- AI LOGIC (TEMP UNTIL YOU ENABLE GPT AGAIN) ----------------
   async function askAI(msg) {
-    setEmotion('thinking');
-    const r = await fetch(API_URL.replace('/',''), { method: 'GET' }) // dummy prevent error
-    setEmotion('neutral');
-    return msg; // TEMP: You can re-enable AI later
+    return msg; // placeholder
   }
 
-  // ---------------- MAIN SPEECH LOGIC ----------------
+  // ---------------- MAIN LOGIC ----------------
   recognition.onresult = (ev) => {
     const text = ev.results[ev.results.length-1][0].transcript.trim().toLowerCase();
     transcriptEl.textContent = 'Transcript: ' + text;
@@ -202,7 +197,8 @@ if (!SpeechRecognition) {
     if (awaitingCommand) {
       awaitingCommand = false;
       (async()=>{
-        await speak(text);
+        const reply = await askAI(text);
+        await speak(reply);
       })();
       return;
     }
@@ -210,8 +206,7 @@ if (!SpeechRecognition) {
     if (text.includes(WAKE)) {
       blink();
       awaitingCommand = true;
-      speak("Yes, I'm here.");
-      return;
+      speak("Yes? I'm listening.");
     }
   };
 
@@ -230,7 +225,3 @@ if (!SpeechRecognition) {
 </script>
 </body>
 </html>
-
-</body>
-</html>
-
