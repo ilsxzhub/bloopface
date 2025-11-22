@@ -90,50 +90,50 @@
   </div>
 
 <script>
-// ---- BLOOP + ELEVENLABS LIAM (FIXED SPEAKING BUG) ----
-// FULLY WORKING: AI → Worker → MP3 → Audio → Speak
+// ---- BLOOPSPEAK V1 — CUTE BEEP LANGUAGE ----
+// replaces TTS completely with fun robotic beeps
 
-// ---------------- EYE BLINK ----------------
 function blink() {
   const eyes = document.querySelectorAll('.eye');
   eyes.forEach(eye => eye.classList.add('blink'));
   setTimeout(() => eyes.forEach(eye => eye.classList.remove('blink')), 200);
 }
 
-// ---------------- UI ----------------
 const statusText = document.getElementById('statusText');
 const transcriptEl = document.getElementById('transcript');
 function setStatus(s) { statusText.textContent = s; }
 
-// ---------------- MEMORY ----------------
-let bloopMemory = JSON.parse(localStorage.getItem('bloopMemory') || '{}');
-function remember(k, v) {
-  bloopMemory[k] = v;
-  localStorage.setItem('bloopMemory', JSON.stringify(bloopMemory));
+// ----------- BLOOPSPEAK BEEP ENGINE -----------
+async function bloopSpeak(text) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playBeep(freq, dur, delay=0) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(ctx.currentTime + delay);
+    osc.stop(ctx.currentTime + delay + dur);
+  }
+
+  let t = 0;
+  for (const char of text) {
+    if (char === ' ') {
+      t += 0.1;
+      continue;
+    }
+    const freq = 400 + (char.charCodeAt(0) % 200); // glowing variation
+    const dur = 0.08;
+    playBeep(freq, dur, t);
+    t += 0.09;
+  }
+
+  return new Promise(res => setTimeout(res, t * 1000));
 }
 
-// ---------------- EMOTIONS ----------------
-function setEmotion(e) {
-  const colors = { thinking:'#0af', happy:'#0f0', angry:'#f00', confused:'#f0f', neutral:'#00f' };
-  document.querySelectorAll('.eye').forEach(el => {
-    el.style.boxShadow = `0 0 40px ${colors[e]}, 0 0 80px ${colors[e]}`;
-  });
-}
-
-// ---------------- AUDIO PLAYER ----------------
-let audioPlayer = new Audio();
-audioPlayer.preload = 'auto';
-audioPlayer.type = 'audio/mpeg';
-
-function playMP3(blob) {
-  if (!blob) return;
-  if (!audioPlayer.paused) audioPlayer.pause();
-  const url = URL.createObjectURL(blob);
-  audioPlayer.src = url;
-  audioPlayer.play();
-}
-
-// ---------------- SPEECH RECOGNITION ----------------
+// ----------- SPEECH RECOGNITION -----------
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (!SpeechRecognition) {
   setStatus('SpeechRecognition not supported.');
@@ -145,51 +145,22 @@ if (!SpeechRecognition) {
 
   let awaitingCommand = false;
   const WAKE = 'bloop';
-  const API_URL = 'https://bloopbot-api.ethanoka94.workers.dev/';
 
-  recognition.onend = () => {
-    if (audioPlayer.paused) setTimeout(() => recognition.start(), 200);
-    else audioPlayer.onended = () => recognition.start();
-  };
-
+  recognition.onend = () => setTimeout(() => recognition.start(), 200);
   recognition.onerror = () => setTimeout(() => recognition.start(), 500);
 
-  // ---------------- AI → Cloudflare Worker → Liam MP3 ----------------
   async function speak(text) {
     try { recognition.stop(); } catch(e){}
-    setStatus('Generating speech...');
-    setEmotion('thinking');
-
-    const ttsRes = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-
-    if (!ttsRes.ok) {
-      setStatus('Worker error: ' + ttsRes.status);
-      return;
-    }
-
-    const mp3 = await ttsRes.blob();
-    setEmotion('neutral');
-    playMP3(mp3);
-
-    return new Promise(res => {
-      audioPlayer.onended = () => {
-        setTimeout(() => recognition.start(), 150);
-        setStatus('Listening for "bloop"...');
-        res();
-      };
-    });
+    setStatus('Beeping...');
+    await bloopSpeak(text);
+    setTimeout(() => recognition.start(), 150);
+    setStatus('Listening for "bloop"...');
   }
 
-  // ---------------- AI LOGIC (TEMP UNTIL YOU ENABLE GPT AGAIN) ----------------
   async function askAI(msg) {
-    return msg; // placeholder
+    return msg; // placeholder, still beeps what you said
   }
 
-  // ---------------- MAIN LOGIC ----------------
   recognition.onresult = (ev) => {
     const text = ev.results[ev.results.length-1][0].transcript.trim().toLowerCase();
     transcriptEl.textContent = 'Transcript: ' + text;
@@ -210,7 +181,6 @@ if (!SpeechRecognition) {
     }
   };
 
-  // ---------------- START BUTTON ----------------
   const startBtn = document.getElementById('startBloop');
   startBtn.onclick = () => {
     startBtn.style.display = 'none';
@@ -225,3 +195,4 @@ if (!SpeechRecognition) {
 </script>
 </body>
 </html>
+
