@@ -3,195 +3,215 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Bloop — AI Robot Eyes</title>
+<title>BloopBot - BROBOTS</title>
 <style>
-  body {
-    background-color: #000;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    color: #8fdcff;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    margin: 0;
-  }
-
-  .eye-container {
-    display: flex;
-    gap: 100px;
-  }
-
-  .eye {
-    width: 120px;
-    height: 120px;
-    background-color: #00f;
-    border-radius: 50%;
-    box-shadow: 0 0 20px #00f, 0 0 40px #00f, 0 0 60px #00f;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .eyelid {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #000;
-    transform: scaleY(0);
-    transform-origin: top;
-    transition: transform 0.15s ease-in-out;
-  }
-
-  .eye.blink .eyelid { transform: scaleY(1); }
-
-  .eye.thinking { animation: thinkPulse 0.9s infinite; }
-  @keyframes thinkPulse {
-    0% { box-shadow: 0 0 20px #00f, 0 0 40px #00f, 0 0 60px #00f; transform: scale(1); }
-    50% { box-shadow: 0 0 40px #00f, 0 0 80px #00f, 0 0 120px #00f; transform: scale(1.03); }
-    100% { box-shadow: 0 0 20px #00f, 0 0 40px #00f, 0 0 60px #00f; transform: scale(1); }
-  }
-
-  .panel {
-    width: min(920px, 92vw);
-    background: rgba(10, 20, 30, 0.6);
-    border: 1px solid rgba(100,200,255,0.12);
-    padding: 12px;
-    border-radius: 10px;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .status { font-weight: 600; color: #bfefff; }
-  .transcript { opacity: 0.9; font-size: 0.9rem; color: #dff6ff; }
-  button { background: #012; color: #9ef; border: 1px solid rgba(160,240,255,0.08); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
-
-  @media (max-width:600px){ .eye { width:90px; height:90px } .eye-container { gap: 40px } }
+  body { background:#000; color:#8fdcff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; gap:18px; }
+  .eye-container { display:flex; gap:80px; align-items:center; }
+  .eye { width:120px; height:120px; background:#00f; border-radius:50%; box-shadow:0 0 20px #00f,0 0 40px #00f; position:relative; overflow:hidden; }
+  .eyelid { position:absolute; top:0; left:0; width:100%; height:100%; background:#000; transform:scaleY(0); transform-origin:top; transition:transform .14s ease-in-out; }
+  .eye.blink .eyelid { transform:scaleY(1); }
+  .eye.thinking { animation:thinkPulse .9s infinite; }
+  @keyframes thinkPulse { 0%{ transform:scale(1); }50%{ transform:scale(1.03); }100%{ transform:scale(1); } }
+  .panel { width:min(920px,92vw); background:rgba(10,20,30,.6); border-radius:10px; padding:12px; display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid rgba(100,200,255,.08); }
+  .status{ font-weight:600; color:#bfefff; } .transcript{ color:#dff6ff; opacity:.9; font-size:.92rem; }
+  #startBloop { padding:18px 36px; font-size:20px; border-radius:14px; background:#00aaff; border:0; color:white; box-shadow:0 0 20px #00aaff; cursor:pointer; }
+  button.small { padding:8px 12px; border-radius:8px; background:#012; color:#9ef; border:1px solid rgba(160,240,255,0.08); cursor:pointer; }
 </style>
 </head>
 <body>
 
-  <button id="startBloop" style="padding:20px 40px;font-size:22px;border-radius:16px;background:#00aaff;border:0;box-shadow:0 0 20px #00aaff,0 0 40px #00aaff;color:white;cursor:pointer;margin-bottom:20px;transition:0.2s;">🔵 Start Bloop</button>
+<button id="startBloop">🔵 Start Bloop</button>
 
-<div class="eye-container"" aria-hidden="true">
-    <div class="eye" id="eye1"><div class="eyelid"></div></div>
-    <div class="eye" id="eye2"><div class="eyelid"></div></div>
-  </div>
+<div class="eye-container" aria-hidden="true">
+  <div class="eye" id="eye1"><div class="eyelid"></div></div>
+  <div class="eye" id="eye2"><div class="eyelid"></div></div>
+</div>
 
-  <div class="panel">
-    <div>
-      <div class="status" id="status">Status: <strong id="statusText">Waiting for "bloop"</strong></div>
-      <div class="transcript" id="transcript">Transcript: —</div>
-    </div>
+<div class="panel">
+  <div>
+    <div class="status" id="status">Status: <strong id="statusText">Waiting to start</strong></div>
+    <div class="transcript" id="transcript">Transcript: —</div>
   </div>
+  <button id="testAI" class="small">Test AI</button>
+</div>
 
 <script>
-// ---- BLOOPSPEAK V1 — CUTE BEEP LANGUAGE ----
-// replaces TTS completely with fun robotic beeps
-
-function blink() {
-  const eyes = document.querySelectorAll('.eye');
-  eyes.forEach(eye => eye.classList.add('blink'));
-  setTimeout(() => eyes.forEach(eye => eye.classList.remove('blink')), 200);
-}
-
+/* ----------------- UI HELPERS ----------------- */
 const statusText = document.getElementById('statusText');
 const transcriptEl = document.getElementById('transcript');
-function setStatus(s) { statusText.textContent = s; }
+function setStatus(s){ statusText.textContent = s; }
 
-// ----------- BLOOPSPEAK BEEP ENGINE -----------
-async function bloopSpeak(text) {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-
-  function playBeep(freq, dur, delay=0) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.12, ctx.currentTime + delay);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(ctx.currentTime + delay);
-    osc.stop(ctx.currentTime + delay + dur);
-  }
-
-  let t = 0;
-  for (const char of text) {
-    if (char === ' ') {
-      t += 0.1;
-      continue;
-    }
-    const freq = 400 + (char.charCodeAt(0) % 200); // glowing variation
-    const dur = 0.08;
-    playBeep(freq, dur, t);
-    t += 0.09;
-  }
-
-  return new Promise(res => setTimeout(res, t * 1000));
+function blink() {
+  document.querySelectorAll('.eye').forEach(e => e.classList.add('blink'));
+  setTimeout(()=>document.querySelectorAll('.eye').forEach(e => e.classList.remove('blink')), 180);
 }
 
-// ----------- SPEECH RECOGNITION -----------
+function thinking(on){
+  document.querySelectorAll('.eye').forEach(e => e.classList.toggle('thinking', !!on));
+}
+
+/* ----------------- BLOOPSPEAK (BEEP TTS) ----------------- */
+async function bloopSpeak(text){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  function beep(freq,dur,delay=0){
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.value=freq;
+    g.gain.setValueAtTime(0.12,ctx.currentTime+delay);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(ctx.currentTime+delay);
+    osc.stop(ctx.currentTime+delay+dur);
+  }
+  let t=0;
+  for(const c of text){
+    if(c===' '){ t+=0.09; continue; }
+    const f = 450+(c.charCodeAt(0)%240);
+    beep(f,0.08,t);
+    t+=0.085;
+  }
+  await new Promise(r=>setTimeout(r,Math.max(200,t*1000)));
+}
+
+/* --------------- TTS SELECTOR ---------------- */
+async function speakText(text){
+  if('speechSynthesis' in window && speechSynthesis.getVoices().length>0){
+    return new Promise(res=>{
+      try{ recognition.stop(); }catch(e){}
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate=1; u.pitch=1;
+      u.onend=()=>{ setTimeout(()=>tryStartRecognition(),200); res(); };
+      speechSynthesis.speak(u);
+      setStatus("Speaking...");
+    });
+  } else {
+    await bloopSpeak(text);
+    setTimeout(()=>tryStartRecognition(),150);
+  }
+}
+
+/* --------------- GEMINI NANO SETUP ---------------- */
+let GN_model = null;
+let GN_supported = false;
+
+async function loadGeminiNanoIfAvailable(){
+  if('ai' in window && typeof ai.getModel === 'function'){
+    try{
+      setStatus("Loading Gemini Nano...");
+      GN_model = await ai.getModel("text-lite");
+      GN_supported = true;
+      setStatus("Gemini Nano ready");
+    } catch(e){
+      GN_supported = false;
+      setStatus("Gemini Nano not available");
+    }
+  } else {
+    GN_supported = false;
+    setStatus("No Gemini Nano support");
+  }
+}
+
+/* ------- Simple local fallback for when Nano is not available ------- */
+function localSimpleAI(t){
+  if(!t.trim()) return "Say something!";
+  const lower = t.toLowerCase();
+  if(lower.includes("how are you")) return "Bloop is glowing happily!";
+  if(lower.includes("your name")) return "I’m Bloop, your neon-tech buddy.";
+  return "You said: " + t;
+}
+
+/* ----------------- ASK AI ----------------- */
+async function askAI(prompt){
+  setStatus("Thinking...");
+  thinking(true);
+  try{
+    if(GN_supported && GN_model){
+      const gen = await GN_model.generate({ input: prompt });
+      let txt =
+        gen?.outputText ||
+        gen?.output?.[0]?.content?.[0]?.text ||
+        gen?.output?.[0]?.text ||
+        "[Unknown GN output] " + prompt;
+      return txt;
+    }
+    return localSimpleAI(prompt);
+  } catch(e){
+    return "I had trouble thinking.";
+  } finally {
+    thinking(false);
+    setStatus('Idle — waiting for "bloop"');
+  }
+}
+
+/* --------------- SPEECH RECOGNITION ---------------- */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRecognition) {
-  setStatus('SpeechRecognition not supported.');
+let recognition = null;
+
+function tryStartRecognition(){
+  try{ if(recognition) recognition.start(); } catch(e){}
+  setStatus('Listening for "bloop"...');
+}
+
+if(!SpeechRecognition){
+  setStatus("No speech recognition");
 } else {
-  const recognition = new SpeechRecognition();
+  recognition = new SpeechRecognition();
   recognition.continuous = true;
+  recognition.lang = "en-US";
   recognition.interimResults = false;
-  recognition.lang = 'en-US';
 
   let awaitingCommand = false;
-  const WAKE = 'bloop';
+  const WAKE = "bloop";
 
-  recognition.onend = () => setTimeout(() => recognition.start(), 200);
-  recognition.onerror = () => setTimeout(() => recognition.start(), 500);
+  recognition.onend = ()=>setTimeout(()=>tryStartRecognition(),200);
+  recognition.onerror = ()=>setTimeout(()=>tryStartRecognition(),400);
 
-  async function speak(text) {
-    try { recognition.stop(); } catch(e){}
-    setStatus('Beeping...');
-    await bloopSpeak(text);
-    setTimeout(() => recognition.start(), 150);
-    setStatus('Listening for "bloop"...');
-  }
+  recognition.onresult = (ev)=>{
+    const text = ev.results[ev.results.length-1][0].transcript.trim();
+    transcriptEl.textContent = "Transcript: " + text;
+    const lower = text.toLowerCase();
 
-  async function askAI(msg) {
-    return msg; // placeholder, still beeps what you said
-  }
-
-  recognition.onresult = (ev) => {
-    const text = ev.results[ev.results.length-1][0].transcript.trim().toLowerCase();
-    transcriptEl.textContent = 'Transcript: ' + text;
-
-    if (awaitingCommand) {
-      awaitingCommand = false;
-      (async()=>{
-        const reply = await askAI(text);
-        await speak(reply);
-      })();
+    if(awaitingCommand){
+      awaitingCommand=false;
+      (async()=>{ const r=await askAI(text); await speakText(r); })();
       return;
     }
 
-    if (text.includes(WAKE)) {
+    if(lower.includes(WAKE)){
       blink();
-      awaitingCommand = true;
-      speak("Yes? I'm listening.");
+      const after = lower.replace(/.*bloop[\s,!?]*/,"").trim();
+      if(after){
+        (async()=>{ const r=await askAI(after); await speakText(r); })();
+      } else {
+        awaitingCommand=true;
+        speakText("Yes? I'm listening.");
+      }
     }
   };
-
-  const startBtn = document.getElementById('startBloop');
-  startBtn.onclick = () => {
-    startBtn.style.display = 'none';
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(()=>{
-      recognition.start();
-      setStatus('Listening for "bloop"...');
-    }).catch(()=> setStatus('Mic blocked'));
-  };
-
-  setInterval(()=>blink(), Math.random()*3000 + 2000);
 }
+
+/* --------------- START BUTTON ---------------- */
+document.getElementById("startBloop").onclick = async ()=>{
+  document.getElementById("startBloop").style.display="none";
+  try{
+    await navigator.mediaDevices.getUserMedia({ audio:true });
+  } catch(e){
+    setStatus("Mic blocked");
+    return;
+  }
+  await loadGeminiNanoIfAvailable();
+  tryStartRecognition();
+};
+
+/* test button */
+document.getElementById("testAI").onclick = async ()=>{
+  const ans = await askAI("Say hello like a robot.");
+  await speakText(ans);
+};
+
+/* random blink */
+setInterval(()=>blink(), Math.random()*3000+2000);
 </script>
+
 </body>
 </html>
