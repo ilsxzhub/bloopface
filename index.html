@@ -7,11 +7,13 @@
 <style>
   body { background:#000; color:#8fdcff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; gap:18px; }
   .eye-container { display:flex; gap:80px; align-items:center; }
-  .eye { width:120px; height:120px; background:#00f; border-radius:50%; box-shadow:0 0 20px #00f,0 0 40px #00f; position:relative; overflow:hidden; }
+  .eye { width:120px; height:120px; background:#00f; border-radius:50%; box-shadow:0 0 20px #00f,0 0 40px #00f; position:relative; overflow:hidden; transition: box-shadow 0.2s, background 0.2s; }
   .eyelid { position:absolute; top:0; left:0; width:100%; height:100%; background:#000; transform:scaleY(0); transform-origin:top; transition:transform .14s ease-in-out; }
   .eye.blink .eyelid { transform:scaleY(1); }
   .eye.thinking { animation:thinkPulse .9s infinite; }
+  .eye.speaking { animation: speakPulse 0.4s infinite; }
   @keyframes thinkPulse { 0%{ transform:scale(1); }50%{ transform:scale(1.03); }100%{ transform:scale(1); } }
+  @keyframes speakPulse { 0%{ transform: scale(1); } 25%{ transform: scale(1.05); } 50%{ transform: scale(1.1); } 75%{ transform: scale(1.05); } 100%{ transform: scale(1); } }
   .panel { width:min(920px,92vw); background:rgba(10,20,30,.6); border-radius:10px; padding:12px; display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid rgba(100,200,255,.08); }
   .status{ font-weight:600; color:#bfefff; } .transcript{ color:#dff6ff; opacity:.9; font-size:.92rem; }
   #startBloop { padding:18px 36px; font-size:20px; border-radius:14px; background:#00aaff; border:0; color:white; box-shadow:0 0 20px #00aaff; cursor:pointer; }
@@ -50,24 +52,35 @@ function thinking(on){
   document.querySelectorAll('.eye').forEach(e => e.classList.toggle('thinking', !!on));
 }
 
+function reactEyesToKeyword(keyword){
+  const eyes = document.querySelectorAll('.eye');
+  if(keyword.includes("glow")){
+    eyes.forEach(e => e.style.boxShadow="0 0 40px #0ff,0 0 80px #0ff");
+  } else if(keyword.includes("dance")){
+    eyes.forEach(e => e.style.transform="rotate(10deg)");
+    setTimeout(()=>eyes.forEach(e => e.style.transform="rotate(0deg)"),400);
+  } else {
+    eyes.forEach(e => e.style.boxShadow="0 0 20px #00f,0 0 40px #00f");
+  }
+}
+
 /* ----------------- BLOOPSPEAK (BEEP TTS) ----------------- */
 async function bloopSpeak(text){
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  function beep(freq,dur,delay=0){
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.frequency.value=freq;
-    g.gain.setValueAtTime(0.12,ctx.currentTime+delay);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);
-    osc.connect(g).connect(ctx.destination);
-    osc.start(ctx.currentTime+delay);
-    osc.stop(ctx.currentTime+delay+dur);
-  }
   let t=0;
   for(const c of text){
     if(c===' '){ t+=0.09; continue; }
     const f = 450+(c.charCodeAt(0)%240);
-    beep(f,0.08,t);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.value=f;
+    g.gain.setValueAtTime(0.12,ctx.currentTime+t);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+t+0.08);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(ctx.currentTime+t);
+    osc.stop(ctx.currentTime+t+0.08);
+
+    if(Math.random() < 0.3) blink(); // blink randomly while speaking
     t+=0.085;
   }
   await new Promise(r=>setTimeout(r,Math.max(200,t*1000)));
@@ -75,22 +88,97 @@ async function bloopSpeak(text){
 
 /* --------------- TTS SELECTOR ---------------- */
 async function speakText(text){
+  reactEyesToKeyword(text.toLowerCase());
+  document.querySelectorAll('.eye').forEach(e => e.classList.add('speaking'));
+
   if('speechSynthesis' in window && speechSynthesis.getVoices().length>0){
     return new Promise(res=>{
       try{ recognition.stop(); }catch(e){}
       const u = new SpeechSynthesisUtterance(text);
       u.rate=1; u.pitch=1;
-      u.onend=()=>{ setTimeout(()=>tryStartRecognition(),200); res(); };
+      u.onend=()=>{
+        document.querySelectorAll('.eye').forEach(e => e.classList.remove('speaking'));
+        setTimeout(()=>tryStartRecognition(),200); 
+        res();
+      };
       speechSynthesis.speak(u);
       setStatus("Speaking...");
     });
   } else {
     await bloopSpeak(text);
+    document.querySelectorAll('.eye').forEach(e => e.classList.remove('speaking'));
     setTimeout(()=>tryStartRecognition(),150);
   }
 }
 
-/* --------------- GEMINI NANO SETUP ---------------- */
+/* --------------- ENHANCED FALLBACK AI ----------------- */
+const conversationHistory = [];
+const MAX_HISTORY = 5;
+
+function fallbackAI(prompt) {
+  if (!prompt.trim()) return "Say something, I’m listening!";
+
+  conversationHistory.push(prompt);
+  if (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
+
+  const lower = prompt.toLowerCase();
+
+  const personality = [
+    "Bloop is glowing happily! 💙",
+    "Your neon-tech buddy is here! ⚡",
+    "I see you, shining human! 🌟",
+    "BloopBot’s sensors are tingling... 👀",
+    "Processing… but make it stylish. 😎"
+  ];
+
+  if (lower.includes("how are you")) return personality[Math.floor(Math.random() * personality.length)];
+  if (lower.includes("your name")) return "I’m Bloop, your neon-tech buddy!";
+  if (lower.includes("joke")) return "Why did the neon light break up with the lamp? It just needed some space! 😆";
+  if (lower.includes("dance")) return "💃 BloopBot is wiggling its neon circuits!";
+  if (lower.includes("glow")) return "✨ Eyes glowing to maximum brightness!";
+
+  if (conversationHistory.length > 1) {
+    const last = conversationHistory[conversationHistory.length - 2];
+    if (last.toLowerCase().includes("hello") || last.toLowerCase().includes("hi")) {
+      return "Hey again! BloopBot’s eyes are twinkling just for you! 💙";
+    }
+  }
+
+  const responses = [
+    "You said: " + prompt,
+    "Hmm… interesting! " + prompt,
+    "I’m thinking… " + prompt,
+    "Bloop heard: " + prompt,
+    "Processing your words… " + prompt
+  ];
+
+  return responses[Math.floor(Math.random() * responses.length)];
+}
+
+/* ----------------- ASK AI ----------------- */
+async function askAI(prompt){
+  setStatus("Thinking...");
+  thinking(true);
+  try{
+    if(GN_supported && GN_model){
+      const gen = await GN_model.generate({ input: prompt });
+      let txt =
+        gen?.outputText ||
+        gen?.output?.[0]?.content?.[0]?.text ||
+        gen?.output?.[0]?.text ||
+        "[Unknown GN output] " + prompt;
+      return txt;
+    }
+    return fallbackAI(prompt);
+  } catch(e){
+    return "I had trouble thinking.";
+  } finally {
+    thinking(false);
+    setStatus('Idle — waiting for "bloop"');
+  }
+}
+
+/* --------------- GEMINI NANO SETUP ----------------- */
 let GN_model = null;
 let GN_supported = false;
 
@@ -111,39 +199,7 @@ async function loadGeminiNanoIfAvailable(){
   }
 }
 
-/* ------- Simple local fallback for when Nano is not available ------- */
-function localSimpleAI(t){
-  if(!t.trim()) return "Say something!";
-  const lower = t.toLowerCase();
-  if(lower.includes("how are you")) return "Bloop is glowing happily!";
-  if(lower.includes("your name")) return "I’m Bloop, your neon-tech buddy.";
-  return "You said: " + t;
-}
-
-/* ----------------- ASK AI ----------------- */
-async function askAI(prompt){
-  setStatus("Thinking...");
-  thinking(true);
-  try{
-    if(GN_supported && GN_model){
-      const gen = await GN_model.generate({ input: prompt });
-      let txt =
-        gen?.outputText ||
-        gen?.output?.[0]?.content?.[0]?.text ||
-        gen?.output?.[0]?.text ||
-        "[Unknown GN output] " + prompt;
-      return txt;
-    }
-    return localSimpleAI(prompt);
-  } catch(e){
-    return "I had trouble thinking.";
-  } finally {
-    thinking(false);
-    setStatus('Idle — waiting for "bloop"');
-  }
-}
-
-/* --------------- SPEECH RECOGNITION ---------------- */
+/* ----------------- SPEECH RECOGNITION ----------------- */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 
@@ -215,3 +271,4 @@ setInterval(()=>blink(), Math.random()*3000+2000);
 
 </body>
 </html>
+
